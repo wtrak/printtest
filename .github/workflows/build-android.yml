@@ -23,7 +23,7 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           ls -la "$ANDROID_HOME/cmdline-tools" || true
-          find "$ANDROID_HOME" -name sdkmanager -type f -print
+          find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -name sdkmanager -type f -print
       - name: Install Android SDK platform
         run: |
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)"
