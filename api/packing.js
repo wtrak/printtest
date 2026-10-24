@@ -107,7 +107,7 @@ function asPackage(r,index){return {
   name:item(r,4),email:item(r,5),boxType:item(r,6),small:Number(r?.[7]||0),medium:Number(r?.[8]||0),
   large:Number(r?.[9]||0),pounds:Number(r?.[10]||0),ounces:Number(r?.[11]||0),
   length:Number(r?.[12]||0),width:Number(r?.[13]||0),height:Number(r?.[14]||0),
-  packedAt:item(r,15),printStatus:item(r,16),station:item(r,17),type:item(r,18)
+  packedAt:item(r,15),printStatus:item(r,16),station:item(r,17),type:item(r,18),shippingImportedAt:item(r,19)
 }}
 function validatePackage(data){
  const auctionId=checkedText(data.auctionId,50,'auction',true);
@@ -168,13 +168,42 @@ module.exports=async function handler(req,res){
   if(action==='packages'&&req.method==='GET'){
    const id=new URL(req.url,'https://example.local').searchParams.get('auctionId');
    if(!id)throw err(400,'Auction required');
-   const rows=(await readRows('Packages','S',3000)).slice(1);
+   const rows=(await readRows('Packages','T',3000)).slice(1);
    return reply(res,200,{packages:rows.map((r,i)=>asPackage(r,i+1)).filter(x=>x.id&&x.auctionId===id).map(({row,...p})=>p)});
+  }
+  if(action==='pendingPackages'&&req.method==='GET'){
+   const rows=(await readRows('Packages','T',3000)).slice(1);
+   const pending=rows.filter(r=>item(r,0)&&!item(r,19)).map(r=>({
+    id:item(r,0),auctionId:item(r,1),customerKey:item(r,2),
+    name:item(r,4),type:item(r,18),packedAt:item(r,15),
+    fields:Array.from({length:pheaders.length},(_,i)=>item(r,i))
+   }));
+   return reply(res,200,{headers:pheaders,packages:pending});
+  }
+  if(action==='markImported'&&req.method==='POST'){
+   const d=await body(req);
+   if(!Array.isArray(d.ids)||!d.ids.length||d.ids.length>500)
+    throw err(400,'Select 1 to 500 packages for import confirmation');
+   const ids=d.ids.map(id=>checkedText(id,80,'package ID',true));
+   if(new Set(ids).size!==ids.length)throw err(400,'Duplicate package IDs in confirmation');
+   for(const id of ids)if(!/^JTK-[0-9A-F-]{10,75}$/.test(id))throw err(400,'Invalid package ID');
+   const rows=await readRows('Packages','T',3000);
+   const byId=new Map(rows.slice(1).map((r,i)=>[item(r,0),{row:i+2,importedAt:item(r,19)}]));
+   for(const id of ids)if(!byId.has(id))throw err(404,'Package not found in Google Sheet: '+id);
+   const fresh=ids.map(id=>byId.get(id)).filter(x=>!x.importedAt);
+   if(fresh.length){
+    const now=new Date().toISOString();
+    await sheets('POST','/values:batchUpdate',{
+     valueInputOption:'RAW',
+     data:fresh.map(x=>({range:'Packages!T'+x.row,majorDimension:'ROWS',values:[[now]]}))
+    });
+   }
+   return reply(res,200,{ok:true,marked:fresh.length,alreadyImported:ids.length-fresh.length,total:ids.length});
   }
   if(action==='exportCsv'&&req.method==='GET'){
    const auctionId=new URL(req.url,'https://example.local').searchParams.get('auctionId');
    if(!auctionId)throw err(400,'Select an auction before export');
-   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','S',3000)]);
+   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','T',3000)]);
    const byKey=new Map(customerRows.slice(1).map(r=>[item(r,1),r]));
    const safeCsv=(v)=>{
     let s=String(v==null?'':v);
@@ -200,7 +229,7 @@ module.exports=async function handler(req,res){
   }
   if(action==='savePackage'&&req.method==='POST'){
    const p=validatePackage(await body(req));
-   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','S',3000)]);
+   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','T',3000)]);
    const ci=customerRows.findIndex((r,i)=>i>0&&item(r,1)===p.customerKey);
    if(ci<1)throw err(404,'Customer not found in Google Sheet');
    const cr=customerRows[ci];
@@ -222,7 +251,7 @@ module.exports=async function handler(req,res){
    const d=await body(req),id=checkedText(d.id,80,'package ID',true);
    const status=checkedText(d.printStatus,120,'print status',true);
    if(!['Data sent — verify label','Print failed','Reprint sent — verify label'].includes(status))throw err(400,'Invalid print status');
-   const rows=await readRows('Packages','S',3000);
+   const rows=await readRows('Packages','T',3000);
    const i=rows.findIndex((r,j)=>j>0&&item(r,0)===id);
    if(i<1)throw err(404,'Package not found');
    await setRange('Packages!Q'+(i+1),[[status]]);
