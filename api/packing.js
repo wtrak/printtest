@@ -16,7 +16,7 @@ const crypto = require('crypto');
 const SHEET_ID = process.env.JTK_SHEET_ID || '1h9SpQUDBdbpqQV7bgQeFCqSgdTkSPPz_meiD6HV6MhI';
 const SESSION_AGE=60*60*24*7;
 const headers=['Bidcard','Name','Email','Street','City','State','Zip','Type','Small Item','Medium Item','Large Item','Pounds','Ounces','Length','Width','Height','International 1','International 2','International 3'];
-const pheaders=['Package ID','Auction ID','Customer Key','Bidcard','Customer Name','Email','Box Type','Small Item','Medium Item','Large Item','Pounds','Ounces','Length','Width','Height','Packed At','Print Status','Packing Station'];
+const pheaders=['Package ID','Auction ID','Customer Key','Bidcard','Customer Name','Email','Box Type','Small Item','Medium Item','Large Item','Pounds','Ounces','Length','Width','Height','Packed At','Print Status','Packing Station','Type'];
 let token=null,tokenExpiry=0;
 
 function b64(input){return Buffer.from(input).toString('base64url')}
@@ -100,14 +100,14 @@ async function appendRange(a1,values){
 function item(r,i){return String(r?.[i]??'')}
 function asCustomer(r,index){return {
   row:index+1,auctionId:item(r,0),customerKey:item(r,1),bidcard:item(r,2),
-  name:item(r,3),email:item(r,4),packingStatus:item(r,21)||'Not packed'
+  name:item(r,3),email:item(r,4),type:item(r,9),packingStatus:item(r,21)||'Not packed'
 }}
 function asPackage(r,index){return {
   row:index+1,id:item(r,0),auctionId:item(r,1),customerKey:item(r,2),bidcard:item(r,3),
   name:item(r,4),email:item(r,5),boxType:item(r,6),small:Number(r?.[7]||0),medium:Number(r?.[8]||0),
   large:Number(r?.[9]||0),pounds:Number(r?.[10]||0),ounces:Number(r?.[11]||0),
   length:Number(r?.[12]||0),width:Number(r?.[13]||0),height:Number(r?.[14]||0),
-  packedAt:item(r,15),printStatus:item(r,16),station:item(r,17)
+  packedAt:item(r,15),printStatus:item(r,16),station:item(r,17),type:item(r,18)
 }}
 function validatePackage(data){
  const auctionId=checkedText(data.auctionId,50,'auction',true);
@@ -118,6 +118,7 @@ function validatePackage(data){
  const p={
   id,auctionId,customerKey,
   boxType:checkedText(data.boxType||'Box',40,'box type'),
+   type:checkedText(data.type,12,'Type',true),
   small:number(data.small,999,'small items',{integer:true}),
   medium:number(data.medium,999,'medium items',{integer:true}),
   large:number(data.large,999,'large items',{integer:true}),
@@ -128,7 +129,8 @@ function validatePackage(data){
   height:number(data.height,200,'height',{positive:true}),
   station:checkedText(data.station||'Android station',50,'station')
  };
- if(p.pounds===0&&p.ounces===0)throw err(400,'Weight must be greater than zero');
+ if(!['Type A','Type B'].includes(p.type))throw err(400,'Select Type A or Type B');
+  if(p.pounds===0&&p.ounces===0)throw err(400,'Weight must be greater than zero');
  return p;
 }
 module.exports=async function handler(req,res){
@@ -166,13 +168,13 @@ module.exports=async function handler(req,res){
   if(action==='packages'&&req.method==='GET'){
    const id=new URL(req.url,'https://example.local').searchParams.get('auctionId');
    if(!id)throw err(400,'Auction required');
-   const rows=(await readRows('Packages','R',3000)).slice(1);
+   const rows=(await readRows('Packages','S',3000)).slice(1);
    return reply(res,200,{packages:rows.map((r,i)=>asPackage(r,i+1)).filter(x=>x.id&&x.auctionId===id).map(({row,...p})=>p)});
   }
   if(action==='exportCsv'&&req.method==='GET'){
    const auctionId=new URL(req.url,'https://example.local').searchParams.get('auctionId');
    if(!auctionId)throw err(400,'Select an auction before export');
-   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','R',3000)]);
+   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','S',3000)]);
    const byKey=new Map(customerRows.slice(1).map(r=>[item(r,1),r]));
    const safeCsv=(v)=>{
     let s=String(v==null?'':v);
@@ -185,7 +187,7 @@ module.exports=async function handler(req,res){
     const c=byKey.get(item(r,2))||[];
     return [
      item(r,3),item(r,4),item(r,5),item(c,5),item(c,6),item(c,7),item(c,8),
-     item(r,6),item(r,7),item(r,8),item(r,9),item(r,10),item(r,11),
+     item(r,18)||item(c,9),item(r,7),item(r,8),item(r,9),item(r,10),item(r,11),
      item(r,12),item(r,13),item(r,14),item(c,18),item(c,19),item(c,20)
     ];
    });
@@ -198,7 +200,7 @@ module.exports=async function handler(req,res){
   }
   if(action==='savePackage'&&req.method==='POST'){
    const p=validatePackage(await body(req));
-   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','R',3000)]);
+   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','S',3000)]);
    const ci=customerRows.findIndex((r,i)=>i>0&&item(r,1)===p.customerKey);
    if(ci<1)throw err(404,'Customer not found in Google Sheet');
    const cr=customerRows[ci];
@@ -207,18 +209,20 @@ module.exports=async function handler(req,res){
    if(prior>=1)return reply(res,200,{package:asPackage(packageRows[prior],prior+1),duplicate:true});
    const t=new Date().toISOString();
    const row=[p.id,p.auctionId,p.customerKey,item(cr,2),item(cr,3),item(cr,4),
-    p.boxType,p.small,p.medium,p.large,p.pounds,p.ounces,p.length,p.width,p.height,t,'Saved',p.station];
-   await appendRange('Packages!A:R',[row]);
+    p.boxType,p.small,p.medium,p.large,p.pounds,p.ounces,p.length,p.width,p.height,t,'Saved',p.station,p.type];
+   await appendRange('Packages!A:S',[row]);
    let warning=null;
+   try{await setRange('Customers!J'+(ci+1),[[p.type]])}
+   catch(e){warning='Package saved with Type, but customer Type could not be updated.';console.error('Post-save customer Type failed')}
    try{await setRange('Customers!V'+(ci+1)+':W'+(ci+1),[['Packed',t]])}
-   catch(e){warning='Package saved, but customer packing status could not be updated.';console.error('Post-save customer status failed')}
+   catch(e){warning=warning?warning+' Customer packing status also could not be updated.':'Package saved, but customer packing status could not be updated.';console.error('Post-save customer status failed')}
    return reply(res,201,{package:asPackage(row,0),warning});
   }
   if(action==='printStatus'&&req.method==='POST'){
    const d=await body(req),id=checkedText(d.id,80,'package ID',true);
    const status=checkedText(d.printStatus,120,'print status',true);
    if(!['Data sent — verify label','Print failed','Reprint sent — verify label'].includes(status))throw err(400,'Invalid print status');
-   const rows=await readRows('Packages','R',3000);
+   const rows=await readRows('Packages','S',3000);
    const i=rows.findIndex((r,j)=>j>0&&item(r,0)===id);
    if(i<1)throw err(404,'Package not found');
    await setRange('Packages!Q'+(i+1),[[status]]);
