@@ -18,16 +18,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 40048203327 --repo "$GITHUB_REPOSITORY" \
+          gh run download 40049191430 --repo "$GITHUB_REPOSITORY" \
             --name jtk-rp425-test-apk --dir /tmp/apk
           ls -lh /tmp/apk/app-debug.apk
       - name: Publish APK as direct download
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp /tmp/apk/app-debug.apk /tmp/JTK-RP425-Test-v2.apk
-          gh release create rp425-test-v2 /tmp/JTK-RP425-Test-v2.apk \
+          cp /tmp/apk/app-debug.apk /tmp/JTK-Packing-Station-v1.apk
+          gh release create packing-station-v1 /tmp/JTK-Packing-Station-v1.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "JTK RP425 Test v2" \
-            --notes "Native Android Bluetooth/ZPL printer test with unique QR code. Uninstall v1 before installing v2. Test only; no customer information." \
+            --title "JTK Packing Station v1" \
+            --notes "Packing Station Android APK: private on-device customer CSV, packing entries, Bluetooth 4x6 labels with QR code. Uninstall the previous test APK before installing. Back up tablet data regularly." \
             --latest
