@@ -198,7 +198,7 @@ function packageInput(){
  if(!['Type A','Type B'].includes(type))throw Error('Select Type A or Type B before saving');
  const payload={
   type,
-  id:'JTK-'+(crypto.randomUUID?crypto.randomUUID().toUpperCase():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase()),
+  id:'PKG-'+(crypto.randomUUID?crypto.randomUUID().toUpperCase():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase()),
   auctionId,customerKey,
   boxType:el('box').selectedOptions[0].textContent,
   station:'JTK Android packing station'

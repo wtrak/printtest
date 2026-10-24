@@ -209,15 +209,15 @@ public class MainActivity extends Activity {
 
     private static String shortLabel() {
         return "^XA\n^CI28\n^PW812\n^LL1218\n" +
-               "^FO38,65^A0N,55,55^FDJTK RP425 TEST^FS\n" +
+               "^FO38,65^A0N,55,55^FDPRINTER TEST^FS\n" +
                "^FO38,148^A0N,34,34^FDBluetooth SPP is working^FS\n" +
                "^FO38,225^GB733,3,3^FS\n^XZ\n";
     }
 
     private static String fullLabel() {
-        String packageId = "JTK-" + UUID.randomUUID().toString().toUpperCase();
+        String packageId = "PKG-" + UUID.randomUUID().toString().toUpperCase();
         return "^XA\n^CI28\n^PW812\n^LL1218\n" +
-               "^FO40,40^A0N,49,49^FDJTK PACKING LABEL^FS\n" +
+               "^FO40,40^A0N,49,49^FDPACKAGE INFORMATION^FS\n" +
                "^FO40,112^A0N,26,26^FDSAMPLE - NOT FOR SHIPPING^FS\n" +
                "^FO40,160^GB730,3,3^FS\n" +
                "^FO40,198^A0N,25,25^FDCUSTOMER^FS\n" +

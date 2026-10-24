@@ -114,7 +114,7 @@ function validatePackage(data){
  const customerKey=checkedText(data.customerKey,100,'customer',true);
  if(!customerKey.startsWith(auctionId+':'))throw err(400,'Customer does not belong to selected auction');
  const id=checkedText(data.id,80,'package ID',true);
- if(!/^JTK-[0-9A-F-]{10,75}$/.test(id))throw err(400,'Invalid package ID');
+ if(!/^(?:JTK|PKG)-[0-9A-F-]{10,75}$/.test(id))throw err(400,'Invalid package ID');
  const p={
   id,auctionId,customerKey,
   boxType:checkedText(data.boxType||'Box',40,'box type'),
@@ -186,7 +186,7 @@ module.exports=async function handler(req,res){
     throw err(400,'Select 1 to 500 packages for import confirmation');
    const ids=d.ids.map(id=>checkedText(id,80,'package ID',true));
    if(new Set(ids).size!==ids.length)throw err(400,'Duplicate package IDs in confirmation');
-   for(const id of ids)if(!/^JTK-[0-9A-F-]{10,75}$/.test(id))throw err(400,'Invalid package ID');
+   for(const id of ids)if(!/^(?:JTK|PKG)-[0-9A-F-]{10,75}$/.test(id))throw err(400,'Invalid package ID');
    const rows=await readRows('Packages','T',3000);
    const byId=new Map(rows.slice(1).map((r,i)=>[item(r,0),{row:i+2,importedAt:item(r,19)}]));
    for(const id of ids)if(!byId.has(id))throw err(404,'Package not found in Google Sheet: '+id);

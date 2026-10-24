@@ -106,7 +106,9 @@ public class PackingActivity extends Activity {
 
     private static String zplLabel(JSONObject p) throws Exception {
         String pkgId = p.getString("id");
-        if (!pkgId.matches("JTK-[A-Z0-9-]{10,80}")) throw new Exception("Invalid package ID");
+        if (!pkgId.matches("(?:PKG|JTK)-[A-Z0-9-]{10,80}")) throw new Exception("Invalid package ID");
+        // Keep legacy database IDs unchanged for matching while printing a neutral display reference.
+        String displayId = pkgId.startsWith("JTK-") ? "PKG-" + pkgId.substring(4) : pkgId;
         String customer = safe(p.optString("name"), 18);
         String auction = safe(p.optString("auctionName"), 22);
         String bidcard = safe(p.optString("bidcard"), 20);
@@ -116,8 +118,8 @@ public class PackingActivity extends Activity {
                 " x " + safe(p.optString("height"), 9) + " in";
         StringBuilder z = new StringBuilder(1500);
         z.append("^XA\n^CI28\n^PW812\n^LL1218\n");
-        z.append(zplText(40, 35, 49, "JTK PACKING LABEL"));
-        z.append(zplText(40, 107, 23, "INTERNAL PACKAGE IDENTIFICATION"));
+        z.append(zplText(40, 35, 49, "PACKAGE INFORMATION"));
+        z.append(zplText(40, 107, 23, "CUSTOMER AND AUCTION DETAILS"));
         z.append("^FO40,160^GB730,3,3^FS\n");
         z.append(zplText(40, 190, 23, "CUSTOMER"));
         z.append(zplText(40, 225, 42, customer));
@@ -143,7 +145,7 @@ public class PackingActivity extends Activity {
         z.append(zplText(40, 940, 38, dims));
         z.append("^FO40,1020^GB730,3,3^FS\n");
         z.append(zplText(40, 1043, 22, "UNIQUE PACKAGE ID"));
-        z.append(zplText(40, 1091, 23, pkgId));
+        z.append(zplText(40, 1091, 23, displayId));
         z.append("^XZ\n");
         return z.toString();
     }

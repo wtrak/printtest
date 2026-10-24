@@ -31,8 +31,8 @@ pre{border-radius:9px;background:#f0f5f8;padding:12px;font-size:12px;overflow:au
 <section class="card" style="border-color:#a9d8b9;background:#eff9f1">
   <h2>Download JTK Packing Station for Android</h2>
   <p>Install the JTK Packing Station app on your Android tablet to save package records to Google Sheets and print 4 × 6 labels with QR codes directly to your paired Rongta RP425 Bluetooth printer.</p>
-  <a href="https://github.com/wtrak/printtest/releases/download/packing-station-v1/JTK-Packing-Station-v1.apk" style="display:block;text-align:center;background:#176b42;color:white;padding:15px;border-radius:10px;font-weight:700;text-decoration:none">Download JTK Packing Station APK</a>
-  <p class="hint">Tap the button on your Android tablet to download, then open the APK from Downloads to install. If JTK Packing Station is already installed, you can simply open it. No GitHub account is needed.</p>
+  <a href="https://github.com/wtrak/printtest/releases/download/packing-station-v2/JTK-Packing-Station-v2.apk" style="display:block;text-align:center;background:#176b42;color:white;padding:15px;border-radius:10px;font-weight:700;text-decoration:none">Download Updated Packing Station APK (v2)</a>
+  <p class="hint">Tap the button on your Android tablet to download, then open the APK from Downloads to install. This is an updated Android APK, so install it to get the unbranded printed labels. You may need to uninstall the older version first if Android reports a signing mismatch. Package records remain in the shared Google Sheet. No GitHub account is needed.</p>
   <p class="hint"><a href="/packing/index.html">Open the browser packing station</a></p>
 </section>
 <section class="card">
@@ -78,12 +78,12 @@ function clean(str,n){return String(str).replace(/[\\^~\r\n]/g,' ').replace(/[^\
 function count(id){return Math.max(0,Math.min(999,parseInt(field(id),10)||0))}
 function line(x,y,label,value,size){return '^FO'+x+','+y+'^A0N,23,23^FD'+clean(label,32)+'^FS\n^FO'+x+','+(y+31)+'^A0N,'+size+','+size+'^FD'+clean(value,35)+'^FS\n'}
 function makeSimple(){
- return '^XA\n^CI28\n^PW812\n^LL1218\n^FO35,60^A0N,57,57^FDJTK RP425 TEST^FS\n^FO35,150^A0N,32,32^FDIf you see this, ZPL printing works.^FS\n^FO35,210^GB730,3,3^FS\n^XZ\n'
+ return '^XA\n^CI28\n^PW812\n^LL1218\n^FO35,60^A0N,57,57^FDPRINTER TEST^FS\n^FO35,150^A0N,32,32^FDIf you see this, ZPL printing works.^FS\n^FO35,210^GB730,3,3^FS\n^XZ\n'
 }
 function makeFull(){
- var id='JTK-'+crypto.randomUUID().toUpperCase();
+ var id='PKG-'+crypto.randomUUID().toUpperCase();
  var p=['^XA','^CI28','^PW812','^LL1218','^LH0,0',
- '^FO40,35^A0N,54,54^FDJTK PACKING LABEL^FS',
+ '^FO40,35^A0N,54,54^FDPACKAGE INFORMATION^FS',
  '^FO40,110^A0N,24,24^FDINTERNAL PACKAGE IDENTIFICATION^FS',
  '^FO40,155^GB730,3,3^FS',
  line(40,184,'CUSTOMER',field('customer'),43),
