@@ -103,7 +103,7 @@ a{color:#175e87;font-weight:700}
 (function(){
 'use strict';
 const REQUIRED=['Bidcard','Name','Email','Street','City','State','Zip','Type','Small Item','Medium Item','Large Item','Pounds','Ounces','Length','Width','Height','International 1','International 2','International 3'];
-let auctions=[],customers=[],packages=[],auctionId='',customerKey='',busy=false,requestInFlight=false,shouldPrint=false,lastPrintID='';
+let auctions=[],customers=[],packages=[],auctionId='',customerKey='',busy=false,pendingSave=null;
 const el=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let timer;
@@ -172,7 +172,7 @@ function packageInput(){
  const ints=['small','medium','large','pounds'];
  const nums=['ounces','length','width','height'];
  const payload={
-  id:'JTK-'+(crypto.randomUUID?crypto.randomUUID().toUpperCase():String(Date.now())),
+  id:'JTK-'+(crypto.randomUUID?crypto.randomUUID().toUpperCase():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase()),
   auctionId,customerKey,
   boxType:el('box').selectedOptions[0].textContent,
   station:'JTK Android packing station'
@@ -185,12 +185,13 @@ function packageInput(){
 async function savePackage(print){
  if(busy)return;
  let payload;
- try{payload=packageInput()}catch(e){toast(e.message);return}
+ try{payload=pendingSave||packageInput();pendingSave=payload}catch(e){toast(e.message);return}
  setBusy(true);
  try{
   const result=await call('savePackage',{method:'POST',data:payload});
   const p=result.package;
   if(!packages.some(x=>x.id===p.id))packages.push(p);
+  pendingSave=null;
   renderPackages();toast(result.warning||'Saved '+p.id+' to Google Sheet');
   resetPacking();
   if(print)printExisting(p,false);
@@ -203,7 +204,8 @@ function printExisting(p,reprint){
  }
  // Only the Android native bridge ever receives the print payload.
  lastPrintID=p.id;
- window.AndroidBridge.printPackage(JSON.stringify(p));
+ const a=auctions.find(x=>x.id===p.auctionId)||{};
+ window.AndroidBridge.printPackage(JSON.stringify({...p,auctionName:a.name||p.auctionId,auctionDate:a.date||''}));
  toast((reprint?'Reprinting ':'Printing ')+p.id+' to RP425…');
 }
 window.jtkNativePrintResult=async function(raw){
@@ -266,8 +268,8 @@ el('loginForm').onsubmit=async e=>{
   el('password').value='';show('app');await loadAuctions()
  }catch(x){toast('Login failed: '+x.message)}
 };
-el('auction').onchange=loadAuction;
-el('customer').onchange=renderSelected;
+el('auction').onchange=()=>{pendingSave=null;loadAuction()};
+el('customer').onchange=()=>{pendingSave=null;renderSelected()};
 el('search').oninput=renderCustomers;
 el('refresh').onclick=loadAuctions;
 el('logout').onclick=async()=>{await call('logout',{method:'POST',data:{}}).catch(()=>{});show('login')};
