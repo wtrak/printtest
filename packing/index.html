@@ -90,6 +90,20 @@ a{color:#175e87;font-weight:700}
 <a href="https://docs.google.com/spreadsheets/d/1h9SpQUDBdbpqQV7bgQeFCqSgdTkSPPz_meiD6HV6MhI/edit" target="_blank" rel="noopener noreferrer">Open master Sheet</a></div></div>
 <div id="packages"></div>
 </section>
+<section class="card" id="shippingHandoff">
+<h2>4. Shipping handoff — all auctions</h2>
+<p>Download only packages not yet marked imported into the shipping software. Records stay in Google Sheets for reprints and history.</p>
+<div class="row"><span class="chip" id="pendingCount">Loading packages…</span><button class="alt" type="button" id="refreshPending">Refresh pending</button></div>
+<p class="muted">Select the packages to export. You can also mark packages you already imported previously, without deleting them.</p>
+<label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="selectAllPending" checked style="width:18px;min-height:18px">Select all pending packages</label>
+<div id="pendingList" style="max-height:260px;overflow-y:auto;border:1px solid #d8e3ea;border-radius:10px;padding:10px;margin:10px 0">Loading…</div>
+<div class="spaced"><button type="button" id="downloadPending">Download selected packages CSV (all auctions)</button></div>
+<div class="box spaced"><strong>After the shipping software imports them successfully</strong>
+<p class="muted">Only mark packages that were accepted into the shipping software. If some failed, uncheck those rows. Marking imported is not the same as marking shipped.</p>
+<label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="confirmImported" style="width:18px;min-height:18px">I confirm the selected packages have already been imported successfully</label>
+<button type="button" class="alt" id="markImported" disabled>Mark selected as imported</button>
+</div>
+</section>
 <section class="card">
 <h2>Desktop administration · Add a new auction CSV</h2>
 <p>This imports one auction into the master Google Sheet. The packing tablet will see it after Refresh. Existing auctions are protected from accidental replacement.</p>
@@ -105,13 +119,13 @@ a{color:#175e87;font-weight:700}
 (function(){
 'use strict';
 const REQUIRED=['Bidcard','Name','Email','Street','City','State','Zip','Type','Small Item','Medium Item','Large Item','Pounds','Ounces','Length','Width','Height','International 1','International 2','International 3'];
-let auctions=[],customers=[],packages=[],auctionId='',customerKey='',busy=false,pendingSave=null;
+let auctions=[],customers=[],packages=[],pendingPackages=[],pendingHeaders=[],auctionId='',customerKey='',busy=false,pendingSave=null;
 const el=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let timer;
 function toast(s){el('toast').textContent=s;el('toast').className='visible';clearTimeout(timer);timer=setTimeout(()=>el('toast').className='',5500)}
 function show(mode){el('setup').classList.toggle('hidden',mode!=='setup');el('loginPanel').classList.toggle('hidden',mode!=='login');el('app').classList.toggle('hidden',mode!=='app')}
-function setBusy(v){busy=v;['savePrint','saveOnly','importAuction','downloadCsv'].forEach(id=>el(id).disabled=v);el('connection').textContent=v?'Working with Google Sheet…':'Google Sheet connected'}
+function setBusy(v){busy=v;['savePrint','saveOnly','importAuction','downloadCsv','downloadPending','refreshPending','markImported'].forEach(id=>el(id).disabled=v);el('connection').textContent=v?'Working with Google Sheet…':'Google Sheet connected'}
 async function call(action,{method='GET',data=null,params={}}={}){
  const q=new URLSearchParams({action,...params});
  const r=await fetch('/api/packing?'+q,{method,headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined,credentials:'same-origin',cache:'no-store'});
@@ -139,7 +153,7 @@ async function loadAuctions(){
   const r=await call('auctions');auctions=r.auctions||[];
   fill(el('auction'),auctions.map(a=>({id:a.id,text:a.name+' · '+a.date+' ('+a.count+' customers)'})),'Select auction');
   if(!el('auction').value&&auctions.length)el('auction').value=auctions[0].id;
-  await loadAuction()
+  await loadAuction();await loadPending()
  }catch(e){toast('Cannot load auctions: '+e.message);if(e.status===401)show('login')}
 }
 async function loadAuction(){
@@ -209,6 +223,7 @@ async function savePackage(print){
   pendingSave=null;
   renderPackages();
   resetPacking();
+  loadPending();
   if(print){
    idToPrint=p.id;
    toast('Package saved to Google Sheet. Starting label print…');
@@ -265,6 +280,61 @@ function renderPackages(){
  ).join('')||'<p>No packages entered for this auction yet.</p>';
  el('packages').querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{const p=packages.find(x=>x.id===b.dataset.id);if(p)printExisting(p,true)});
 }
+function selectedPending(){
+ const checked=new Set([...el('pendingList').querySelectorAll('input[data-package-id]:checked')].map(x=>x.getAttribute('data-package-id')));
+ return pendingPackages.filter(p=>checked.has(p.id));
+}
+function renderPending(){
+ el('pendingCount').textContent=pendingPackages.length+' package(s) pending import';
+ el('pendingList').innerHTML=pendingPackages.map(p=>
+  '<label style="display:flex;gap:9px;align-items:flex-start;padding:5px 0;border-bottom:1px solid #eef3f7">'+
+  '<input type="checkbox" checked data-package-id="'+esc(p.id)+'" style="width:18px;min-height:18px;flex:none;margin-top:2px">'+
+  '<span style="overflow-wrap:anywhere"><strong>'+esc(p.name)+' · '+esc(p.auctionId)+'</strong><small style="display:block;color:#6a7f8a">'+esc(p.id)+' · '+esc(p.type||'TYPE MISSING — review before import')+'</small></span></label>'
+ ).join('')||'<p class="muted">Nothing pending. New packed packages will appear here automatically.</p>';
+ el('selectAllPending').checked=true;
+ el('confirmImported').checked=false;
+ el('markImported').disabled=true;
+ el('downloadPending').disabled=!pendingPackages.length;
+}
+async function loadPending(){
+ try{
+  const r=await call('pendingPackages');
+  pendingPackages=r.packages||[];
+  pendingHeaders=r.headers||[];
+  renderPending();
+ }catch(e){el('pendingCount').textContent='Cannot load pending packages';toast('Shipping handoff: '+e.message)}
+}
+function csvField(v){
+ let s=String(v==null?'':v);
+ if(/^\s*[=+@]/.test(s))s="'"+s;
+ return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function exportPending(){
+ const selected=selectedPending();
+ if(!selected.length)return toast('Select at least one pending package');
+ if(pendingHeaders.length!==19)return toast('Export schema mismatch; refresh pending packages');
+ const csv=[pendingHeaders,...selected.map(p=>p.fields)].map(row=>row.map(csvField).join(',')).join('\r\n')+'\r\n';
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download='jtk-shipping-handoff-'+new Date().toISOString().slice(0,10)+'.csv';
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),10000);
+ toast('CSV created with '+selected.length+' package(s). Confirm import only after shipping software accepts them.');
+}
+async function markPendingImported(){
+ if(!el('confirmImported').checked)return toast('Confirm the selected packages were imported first');
+ const selected=selectedPending();
+ if(!selected.length)return toast('Select the packages you successfully imported');
+ if(selected.length>500)return toast('Confirm at most 500 packages at a time');
+ if(busy)return;
+ setBusy(true);
+ try{
+  const r=await call('markImported',{method:'POST',data:{ids:selected.map(p=>p.id)}});
+  toast('Marked '+r.marked+' imported; '+r.alreadyImported+' were already confirmed.');
+  await loadPending();
+ }catch(e){toast('Could not mark imported: '+e.message)}
+ finally{setBusy(false)}
+}
 function parseCSV(s){
  let rows=[],row=[],field='',quoted=false;
  s=s.replace(/^\uFEFF/,'');
@@ -315,6 +385,12 @@ el('box').onchange=()=>{
 el('saveOnly').onclick=()=>savePackage(false);
 el('savePrint').onclick=()=>savePackage(true);
 el('importAuction').onclick=importAuction;
+el('refreshPending').onclick=loadPending;
+el('downloadPending').onclick=exportPending;
+el('markImported').onclick=markPendingImported;
+el('confirmImported').onchange=()=>el('markImported').disabled=!el('confirmImported').checked;
+el('selectAllPending').onchange=()=>el('pendingList').querySelectorAll('input[data-package-id]').forEach(x=>x.checked=el('selectAllPending').checked);
+el('pendingList').onchange=()=>el('selectAllPending').checked=el('pendingList').querySelectorAll('input[data-package-id]:not(:checked)').length===0;
 el('downloadCsv').onclick=async()=>{
  try{
   const resp=await fetch('/api/packing?action=exportCsv&auctionId='+encodeURIComponent(auctionId),{credentials:'same-origin'});
