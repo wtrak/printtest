@@ -107,7 +107,7 @@ public class PackingActivity extends Activity {
     private static String zplLabel(JSONObject p) throws Exception {
         String pkgId = p.getString("id");
         if (!pkgId.matches("JTK-[A-Z0-9-]{10,80}")) throw new Exception("Invalid package ID");
-        String customer = safe(p.optString("name"), 27);
+        String customer = safe(p.optString("name"), 18);
         String auction = safe(p.optString("auctionName"), 22);
         String bidcard = safe(p.optString("bidcard"), 20);
         String date = safe(p.optString("auctionDate"), 13);
