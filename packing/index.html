@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#172f43"><title>JTK Packing Station</title>
+<style>
+:root{font-family:system-ui,-apple-system,Arial,sans-serif;color:#172b3b;background:#f4f7fa}
+*{box-sizing:border-box}body{margin:0}header{padding:15px 22px;background:#172f43;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:12px}
+header strong{font-size:18px}header small{opacity:.75;display:block;font-size:12px;margin-top:3px}
+.wrap{max-width:1100px;margin:0 auto;padding:19px}.cols{display:grid;grid-template-columns:minmax(270px,0.95fr) minmax(340px,1.05fr);gap:16px}
+.panel{background:#fff;border:1px solid #dae3eb;border-radius:15px;padding:18px;margin-bottom:16px;box-shadow:0 3px 12px #14314409}
+h1{font-size:22px;margin:0}h2{font-size:18px;margin:0 0 14px}h3{font-size:15px;margin:0 0 10px}
+p{color:#5b7082;line-height:1.5;font-size:14px}button,.upload{font:700 14px system-ui;min-height:44px;padding:11px 14px;border-radius:10px;border:0;cursor:pointer;background:#193f5d;color:#fff;text-align:center;display:inline-block}
+button.secondary{background:#e9eff4;color:#19384e}button:disabled{opacity:.45;cursor:not-allowed}
+button.danger{background:#9d4935}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{flex-shrink:0}
+label{display:block;font-size:12px;color:#50687b;font-weight:800;margin:10px 0 5px}
+input,select{width:100%;padding:11px;border-radius:9px;border:1px solid #b8cbd8;background:#fff;color:#183348;font:15px system-ui;min-height:43px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.hint{font-size:12px;color:#627789}.list{max-height:380px;overflow-y:auto;border:1px solid #e1e9ef;border-radius:10px;margin-top:10px}
+.customer{display:block;text-align:left;width:100%;padding:12px 13px;border:0;border-radius:0;background:#fff;color:#153148;border-bottom:1px solid #edf1f5;min-height:58px}
+.customer strong{display:block}.customer small{display:block;font-size:12px;font-weight:400;color:#657789;margin-top:3px}
+.customer.selected{background:#eaf3f9;border-left:4px solid #28668b;padding-left:9px}.customer.packed:after{content:"Packed";float:right;color:#14724c;font-size:11px;font-weight:800}
+.divider{height:1px;background:#e6ebef;margin:15px 0}.hidden{display:none!important}
+.pill{font-size:12px;border:1px solid #bfd1dc;padding:5px 9px;border-radius:30px;background:#f2f6fa}
+.pill.good{color:#176a44;background:#e6f6ed;border-color:#b8e4ce}
+.pkg{border:1px solid #d9e4eb;border-radius:11px;padding:12px;margin-bottom:9px}
+.pkg .row{justify-content:space-between}.pkg strong{font-size:13px}
+.pkg small{color:#566b80;display:block;margin-top:4px;font-size:12px}
+.notice{padding:12px;border:1px solid #b8d3e5;background:#eff7fd;border-radius:10px;font-size:13px;color:#275477}
+.status{position:fixed;bottom:16px;right:16px;left:16px;margin:auto;max-width:560px;background:#17354a;color:#fff;padding:13px 15px;border-radius:10px;box-shadow:0 8px 30px #142d4960;display:none;z-index:20}
+.status.visible{display:block}
+@media(max-width:710px){.cols{grid-template-columns:1fr}.wrap{padding:12px}header{padding:14px}.panel{padding:14px}.three{gap:7px}}
+</style></head>
+<body>
+<header><div><strong>JTK · Packing Station</strong><small>Separate auction packing workflow</small></div><span id="mode" class="pill">Loading</span></header>
+<main class="wrap">
+<div class="panel"><div class="row" style="justify-content:space-between">
+<div style="flex:1;min-width:180px"><h1>Packing dashboard</h1><p style="margin:4px 0 0">Import the same customer CSV you already use for Shipping Organizer.</p></div>
+<label class="upload" for="csvInput">Import auction CSV</label>
+<input id="csvInput" type="file" accept=".csv,text/csv" style="display:none">
+</div><div id="summary" class="hint" style="margin-top:9px"></div></div>
+<div class="cols">
+<section class="panel">
+<h2>1. Choose auction & customer</h2>
+<label for="auctionSelect">Auction</label><select id="auctionSelect"></select>
+<label for="search">Find customer or bidcard</label><input id="search" placeholder="Search customer name, bidcard, email…">
+<div id="customerList" class="list"></div>
+<p class="hint">The import remains on this tablet. No customer data is uploaded to GitHub or the website.</p>
+</section>
+<section class="panel" id="editor">
+<h2>2. Package details</h2>
+<div id="selectedInfo" class="notice">Import a CSV, then select a customer.</div>
+<div id="packingFields" class="hidden">
+<label for="box">Box size preset</label><select id="box">
+<option value="12,12,8">12 × 12 × 8 inches</option><option value="7,7,6">7 × 7 × 6 inches</option>
+<option value="16,12,10">16 × 12 × 10 inches</option><option value="custom">Custom dimensions</option></select>
+<div class="three">
+<div><label for="length">Length (in)</label><input id="length" type="number" step=".1" min=".1" inputmode="decimal" value="12"></div>
+<div><label for="width">Width (in)</label><input id="width" type="number" step=".1" min=".1" inputmode="decimal" value="12"></div>
+<div><label for="height">Height (in)</label><input id="height" type="number" step=".1" min=".1" inputmode="decimal" value="8"></div>
+</div>
+<div class="two">
+<div><label for="lbs">Weight — pounds</label><input id="lbs" type="number" step="1" min="0" inputmode="numeric" value="0"></div>
+<div><label for="oz">Weight — ounces</label><input id="oz" type="number" step=".1" min="0" max="15.99" inputmode="decimal" value="0"></div>
+</div>
+<div class="three">
+<div><label for="small">Small items</label><input id="small" type="number" step="1" min="0" inputmode="numeric" value="0"></div>
+<div><label for="medium">Medium items</label><input id="medium" type="number" step="1" min="0" inputmode="numeric" value="0"></div>
+<div><label for="large">Large items</label><input id="large" type="number" step="1" min="0" inputmode="numeric" value="0"></div>
+</div>
+<div class="divider"></div>
+<div class="row"><button id="savePrint">Save package &amp; print label</button><button id="saveOnly" class="secondary">Save without printing</button></div>
+<p class="hint">Each box receives a permanent, unique ID. Reprints use the same ID, never a new one.</p>
+</div>
+</section>
+</div>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>3. Packed packages</h2>
+<div class="row"><button class="secondary" id="exportCsv">Export packing CSV</button><button class="secondary" id="exportBackup">Backup tablet data</button></div></div>
+<div id="packages"></div>
+<p class="hint">The packing CSV preserves the Shipping Organizer's 19 source columns and adds package/auction metadata. Do <strong>not</strong> use its existing Replace Auction Rows button: that would delete payment statuses and matched invoice PDFs. A safe update importer will be needed to merge completed package data.</p>
+</section>
+</main><div class="status" id="toast" role="status"></div>
+<script>
+(function(){
+'use strict';
+var H=['Bidcard','Name','Email','Street','City','State','Zip','Type','Small Item','Medium Item','Large Item','Pounds','Ounces','Length','Width','Height','International 1','International 2','International 3'];
+var KEY='jtk.packing.v1';
+var db;
+try{db=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){db=null}
+if(!db||!Array.isArray(db.auctions)||!Array.isArray(db.packages)){db={auctions:[],packages:[]}}
+var currentAuction=null,currentOrder=null,toastTimeout;
+function el(id){return document.getElementById(id)}
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function notify(s){el('toast').textContent=s;el('toast').className='status visible';clearTimeout(toastTimeout);toastTimeout=setTimeout(function(){el('toast').className='status'},5000)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db));return true}catch(e){notify('Storage failed: '+e.message);return false}}
+function uid(){return (crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(36).slice(2))}
+function parseCSV(text){
+ var rows=[],row=[],field='',q=false,after=false;
+ text=String(text).replace(/^\uFEFF/,'');
+ for(var i=0;i<text.length;i++){
+  var c=text[i];
+  if(q){if(c==='"'){if(text[i+1]==='"'){field+='"';i++}else{q=false;after=true}}else{field+=c}}
+  else if(c===',' ){row.push(field);field='';after=false}
+  else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);if(row.some(function(x){return x.trim()}))rows.push(row);row=[];field='';after=false}
+  else if(c==='"'&&field===''){q=true}
+  else if(c===' '&&after){}else{field+=c;after=false}
+ }
+ if(q)throw Error('CSV has an unclosed quoted cell.');
+ row.push(field);if(row.some(function(x){return x.trim()}))rows.push(row);
+ if(!rows.length)throw Error('CSV is empty.');
+ var hdr=rows.shift().map(function(x){return x.trim()});
+ var missing=H.filter(function(x){return hdr.indexOf(x)<0});
+ if(missing.length)throw Error('Missing required template columns: '+missing.join(', '));
+ return rows.map(function(cols){var o={};H.forEach(function(h){o[h]=String(cols[hdr.indexOf(h)]||'').trim()});return o}).filter(function(o){return o.Bidcard&&o.Name});
+}
+function csvEscape(s){s=String(s==null?'':s);return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function makeCSV(rows,headers){return [headers.join(',')].concat(rows.map(function(x){return headers.map(function(h){return csvEscape(x[h])}).join(',')})).join('\r\n')+'\r\n'}
+function selectedAuction(){return db.auctions.find(function(x){return x.id===currentAuction})}
+function selectedOrder(){var a=selectedAuction();return a&&a.orders.find(function(x){return x.id===currentOrder})}
+function niceNum(x){return String(Number(x))}
+function safeInt(id){var n=Number(el(id).value);if(!Number.isInteger(n)||n<0||n>999)throw Error('Enter a valid 0–999 count for '+id);return n}
+function safePositive(id){var n=Number(el(id).value);if(!Number.isFinite(n)||n<=0||n>200)throw Error('Enter valid box '+id+' in inches');return n}
+function deriveAuction(filename){
+ var m=filename.match(/^(.*?)[_\s-](\d{4}-\d{2}-\d{2})/);
+ if(!m)throw Error('Filename needs auction and date (example: Auction-F_2026-10-15_Customer-Data-From-Invoices.csv). Rename file before importing.');
+ return {name:m[1].replace(/[-_]+/g,' ').trim(),date:m[2]};
+}
+async function importFile(file){
+ if(!file)return;
+ try{
+  var rows=parseCSV(await file.text());
+  var meta=deriveAuction(file.name);
+  var auction=db.auctions.find(function(x){return x.date===meta.date&&x.name===meta.name});
+  if(!auction){auction={id:uid(),name:meta.name,date:meta.date,orders:[]};db.auctions.push(auction)}
+  var added=0,updated=0;
+  rows.forEach(function(r){
+   var old=auction.orders.find(function(x){return x.Bidcard===r.Bidcard&&x.Email.toLowerCase()===r.Email.toLowerCase()});
+   if(old){Object.assign(old,r);updated++}
+   else{auction.orders.push(Object.assign({id:uid()},r));added++}
+  });
+  if(!save())return;
+  currentAuction=auction.id;currentOrder=null;render();
+  notify('Imported '+rows.length+' customers ('+added+' new, '+updated+' updated) for '+auction.name+' · '+auction.date+'.');
+ }catch(e){notify('Import error: '+e.message)}
+ finally{el('csvInput').value=''}
+}
+function render(){
+ var a=selectedAuction();
+ if(!a&&db.auctions.length){db.auctions.sort(function(x,y){return y.date.localeCompare(x.date)});currentAuction=db.auctions[0].id;a=selectedAuction()}
+ if(a&&(!currentOrder||!a.orders.some(function(x){return x.id===currentOrder})))currentOrder=null;
+ el('mode').textContent=window.AndroidBridge?'Android printer ready':'Browser preview';
+ el('summary').textContent=db.auctions.length+' auction(s) · '+db.packages.length+' saved package(s) on this device';
+ el('auctionSelect').innerHTML=db.auctions.slice().sort(function(x,y){return y.date.localeCompare(x.date)}).map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===currentAuction?' selected':'')+'>'+esc(x.name)+' · '+esc(x.date)+' ('+x.orders.length+' customers)</option>'}).join('')||'<option value="">Import a CSV first</option>';
+ el('selectedInfo').textContent=currentOrder?(selectedOrder().Name+' · Bidcard '+selectedOrder().Bidcard+' · '+a.name+' '+a.date):'Choose a customer to enter packing details.';
+ el('packingFields').classList.toggle('hidden',!currentOrder);
+ renderList();renderPackages()
+}
+function renderList(){
+ var a=selectedAuction();if(!a){el('customerList').innerHTML='<p style="padding:10px">No auction loaded.</p>';return}
+ var q=el('search').value.toLowerCase().trim();
+ var rows=a.orders.filter(function(o){return [o.Name,o.Bidcard,o.Email].join(' ').toLowerCase().includes(q)}).sort(function(x,y){return x.Name.localeCompare(y.Name)});
+ el('customerList').innerHTML=rows.map(function(o){
+  var np=db.packages.filter(function(p){return p.auctionId===a.id&&p.orderId===o.id}).length;
+  return '<button class="customer '+(np?'packed ':'')+(currentOrder===o.id?'selected':'')+'" data-order="'+esc(o.id)+'"><strong>'+esc(o.Name)+'</strong><small>Bidcard '+esc(o.Bidcard)+' · '+np+' package(s)</small></button>';
+ }).join('')||'<p style="padding:10px">No matching customers.</p>';
+ el('customerList').querySelectorAll('[data-order]').forEach(function(btn){btn.onclick=function(){currentOrder=this.dataset.order;render()}});
+}
+function readPackage(){
+ var a=selectedAuction(),o=selectedOrder();if(!a||!o)throw Error('Choose a customer.');
+ var lbs=Number(el('lbs').value),oz=Number(el('oz').value);
+ if(!Number.isInteger(lbs)||lbs<0||lbs>150)throw Error('Enter a valid number of pounds');
+ if(!Number.isFinite(oz)||oz<0||oz>=16)throw Error('Ounces must be 0 through 15.99');
+ if(lbs===0&&oz===0)throw Error('Package weight must be greater than zero');
+ return {id:'JTK-'+uid().toUpperCase(),auctionId:a.id,auctionName:a.name,auctionDate:a.date,
+ orderId:o.id,bidcard:o.Bidcard,name:o.Name,email:o.Email,street:o.Street,city:o.City,state:o.State,zip:o.Zip,
+ length:safePositive('length'),width:safePositive('width'),height:safePositive('height'),
+ pounds:lbs,ounces:oz,small:safeInt('small'),medium:safeInt('medium'),large:safeInt('large'),
+ packedAt:new Date().toISOString(),printStatus:'Saved',printAttempts:0}
+}
+function printPackage(p){
+ if(!window.AndroidBridge||typeof window.AndroidBridge.printPackage!=='function'){notify('Saved. Install/open JTK Android app to print; browser preview cannot access RP425.');return}
+ p.printAttempts=(p.printAttempts||0)+1;p.printStatus='Sending';save();renderPackages();
+ try{window.AndroidBridge.printPackage(JSON.stringify(p));notify('Sending '+p.id+' to RP425…')}
+ catch(e){p.printStatus='Print error: '+e.message;save();renderPackages();notify(e.message)}
+}
+function savePackage(andPrint){
+ try{var p=readPackage();db.packages.push(p);if(!save())return;render();notify('Saved '+p.id);if(andPrint)printPackage(p)}
+ catch(e){notify(e.message)}
+}
+window.jtkNativePrintResult=function(raw){
+ try{var result=typeof raw==='string'?JSON.parse(raw):raw;var p=db.packages.find(function(x){return x.id===result.id});if(p){p.printStatus=result.ok?'Sent — verify label':'Print failed: '+result.message;save();renderPackages()}notify((result.ok?'Printer received data for ':'Printing failed for ')+result.id+(result.ok?'':': '+result.message))}
+ catch(e){notify('Printer response error: '+e.message)}
+};
+function renderPackages(){
+ var a=selectedAuction();
+ var all=db.packages.filter(function(p){return !a||p.auctionId===a.id}).slice().reverse();
+ el('packages').innerHTML=all.slice(0,100).map(function(p){
+  return '<div class="pkg"><div class="row"><div style="flex:1;min-width:230px"><strong>'+esc(p.name)+' — '+esc(p.bidcard)+'</strong><small>'+esc(p.id)+' · '+esc(p.length)+'×'+esc(p.width)+'×'+esc(p.height)+' in · '+esc(p.pounds)+' lb '+esc(p.ounces)+' oz</small><small>'+esc(p.printStatus)+'</small></div><button class="secondary" data-reprint="'+esc(p.id)+'">Reprint</button></div></div>';
+ }).join('')||'<p>No packages saved for this auction.</p>';
+ el('packages').querySelectorAll('[data-reprint]').forEach(function(b){b.onclick=function(){var p=db.packages.find(function(x){return x.id===b.dataset.reprint});if(p)printPackage(p)}});
+}
+function saveText(name,body,type){
+ if(window.AndroidBridge&&typeof window.AndroidBridge.saveFile==='function'){
+  window.AndroidBridge.saveFile(name,body,type);return
+ }
+ var blob=new Blob([body],{type:type});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=name;link.click();setTimeout(function(){URL.revokeObjectURL(link.href)},3000)
+}
+function exportData(){
+ var a=selectedAuction();var records=db.packages.filter(function(x){return !a||x.auctionId===a.id});
+ if(!records.length){notify('No saved packages to export.');return}
+ var hdr=H.concat(['Auction','Auction Date','Package ID','Packed At','Print Status']);
+ var rows=records.map(function(p){
+  var o={};H.forEach(function(h){o[h]=''});
+  Object.assign(o,{Bidcard:p.bidcard,Name:p.name,Email:p.email,Street:p.street,City:p.city,State:p.state,Zip:p.zip,
+    Type:'Box','Small Item':p.small,'Medium Item':p.medium,'Large Item':p.large,
+    Pounds:p.pounds,Ounces:p.ounces,Length:p.length,Width:p.width,Height:p.height,
+    Auction:p.auctionName,'Auction Date':p.auctionDate,'Package ID':p.id,'Packed At':p.packedAt,'Print Status':p.printStatus});
+  return o
+ });
+ saveText('jtk-packing-'+(a?a.date:'all')+'.csv',makeCSV(rows,hdr),'text/csv');notify('Exported '+rows.length+' package rows.')
+}
+el('csvInput').addEventListener('change',function(){importFile(this.files[0])});
+el('auctionSelect').onchange=function(){currentAuction=this.value;currentOrder=null;el('search').value='';render()};
+el('search').oninput=renderList;
+el('box').onchange=function(){if(this.value!=='custom'){var t=this.value.split(',');el('length').value=t[0];el('width').value=t[1];el('height').value=t[2]}};
+el('savePrint').onclick=function(){savePackage(true)};
+el('saveOnly').onclick=function(){savePackage(false)};
+el('exportCsv').onclick=exportData;
+el('exportBackup').onclick=function(){saveText('jtk-packing-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(db,null,2),'application/json');notify('Saved backup file.')};
+render();
+})();
+</script>
+</body></html>
