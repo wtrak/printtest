@@ -1,10 +1,9 @@
-name: Publish RP425 test APK
+name: Publish Packing Station APK
 
 on:
-  push:
-    paths:
-      - '.github/workflows/publish-apk.yml'
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build Android Printer Test APK"]
+    types: [completed]
 
 permissions:
   actions: read
@@ -12,22 +11,25 @@ permissions:
 
 jobs:
   publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download successful test build
+      - name: Download new packing station APK
         env:
           GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          gh run download 40049191430 --repo "$GITHUB_REPOSITORY" \
+          gh run download "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --name jtk-rp425-test-apk --dir /tmp/apk
-          ls -lh /tmp/apk/app-debug.apk
-      - name: Publish APK as direct download
+          test -s /tmp/apk/app-debug.apk
+          cp /tmp/apk/app-debug.apk /tmp/JTK-Packing-Station-v2.apk
+      - name: Publish Android download
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          cp /tmp/apk/app-debug.apk /tmp/JTK-Packing-Station-v1.apk
-          gh release create packing-station-v1 /tmp/JTK-Packing-Station-v1.apk \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "JTK Packing Station v1" \
-            --notes "Packing Station Android APK: private on-device customer CSV, packing entries, Bluetooth 4x6 labels with QR code. Uninstall the previous test APK before installing. Back up tablet data regularly." \
+          gh release create packing-station-v2 /tmp/JTK-Packing-Station-v2.apk \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" \
+            --title "JTK Packing Station v2 - neutral labels" \
+            --notes "Android packing application with neutral 4x6 package labels. New IDs start PKG- instead of JTK-. Existing Google Sheet records remain unchanged. Backup data is in Google Sheets, not stored locally; you may need to uninstall the previous APK because Android debug build signatures can differ." \
             --latest
