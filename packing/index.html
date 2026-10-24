@@ -53,6 +53,8 @@ a{color:#175e87;font-weight:700}
 <label for="search">Filter customer dropdown</label><input id="search" placeholder="Optional: name or bidcard" autocomplete="off">
 <p class="muted" id="auctionSummary"></p>
 <div id="selectedCustomer" class="box">Choose an auction and customer to begin.</div>
+<label for="packageType">Type <span class="muted">(required for shipping)</span></label>
+<select id="packageType"><option value="">Select Type…</option><option value="Type A">Type A</option><option value="Type B">Type B</option></select>
 </section>
 <section class="card">
 <h2>2. Package details</h2>
@@ -161,9 +163,16 @@ function renderCustomers(){
  renderSelected()
 }
 function renderSelected(){
+ const previous=customerKey;
  customerKey=el('customer').value;const c=customers.find(x=>x.customerKey===customerKey);
  const existing=packages.filter(p=>p.customerKey===customerKey).length;
  el('selectedCustomer').innerHTML=c?'<strong>'+esc(c.name)+'</strong> · Bidcard '+esc(c.bidcard)+'<div class="muted">'+esc(c.email)+' · '+existing+' saved box(es)</div>':'Choose a customer from the dropdown.';
+ if(previous!==customerKey){
+  const existingType=packages.find(p=>p.customerKey===customerKey&&['Type A','Type B'].includes(p.type));
+  const raw=(existingType?.type||c?.type||'').trim();
+  const normalized=raw==='A'?'Type A':raw==='B'?'Type B':raw;
+  el('packageType').value=['Type A','Type B'].includes(normalized)?normalized:'';
+ }
 }
 function resetPacking(){for(const id of ['small','medium','large','pounds','ounces'])el(id).value=0}
 function packageInput(){
@@ -171,7 +180,10 @@ function packageInput(){
  if(!c)throw Error('Select a customer first');
  const ints=['small','medium','large','pounds'];
  const nums=['ounces','length','width','height'];
+ const type=el('packageType').value;
+ if(!['Type A','Type B'].includes(type))throw Error('Select Type A or Type B before saving');
  const payload={
+  type,
   id:'JTK-'+(crypto.randomUUID?crypto.randomUUID().toUpperCase():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase()),
   auctionId,customerKey,
   boxType:el('box').selectedOptions[0].textContent,
@@ -192,6 +204,8 @@ async function savePackage(print){
   const result=await call('savePackage',{method:'POST',data:payload});
   const p=result.package;
   if(!packages.some(x=>x.id===p.id))packages.push(p);
+  const selected=customers.find(x=>x.customerKey===p.customerKey);
+  if(selected&&p.type)selected.type=p.type;
   pendingSave=null;
   renderPackages();
   resetPacking();
@@ -246,7 +260,7 @@ function renderPackages(){
   '<div class="pkg"><div class="row between"><div style="flex:1;min-width:225px">'+
   '<strong>'+esc(p.name)+' · '+esc(p.bidcard)+'</strong>'+
   '<small>'+esc(p.id)+' · '+esc(p.length)+' × '+esc(p.width)+' × '+esc(p.height)+' in · '+esc(p.pounds)+' lb '+esc(p.ounces)+' oz</small>'+
-  '<small>'+esc(p.small)+' small · '+esc(p.medium)+' medium · '+esc(p.large)+' large · '+esc(p.printStatus)+'</small>'+
+  '<small>'+esc(p.type||'Type not set')+' · '+esc(p.small)+' small · '+esc(p.medium)+' medium · '+esc(p.large)+' large · '+esc(p.printStatus)+'</small>'+
   '</div><button class="alt" data-id="'+esc(p.id)+'">Reprint</button></div></div>'
  ).join('')||'<p>No packages entered for this auction yet.</p>';
  el('packages').querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>{const p=packages.find(x=>x.id===b.dataset.id);if(p)printExisting(p,true)});
