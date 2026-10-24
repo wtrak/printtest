@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#122a3c">
+<title>JTK · RP425 Bluetooth Printer Test</title>
+<style>
+:root{font-family:system-ui,-apple-system,Roboto,Arial,sans-serif;color:#192e3f;background:#f3f6f9}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:690px;margin:auto;padding:22px 15px 40px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:21px;font-weight:800}
+h1{font-size:26px;margin:0 0 7px}p{color:#516477;line-height:1.5}
+.card{border:1px solid #d9e3ea;border-radius:16px;background:#fff;padding:19px;margin-top:15px;box-shadow:0 2px 9px #13324d08}
+.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.between{justify-content:space-between}.tag{font-size:12px;border-radius:20px;border:1px solid #cddae3;padding:6px 10px;font-weight:600}
+.tag.ok{background:#e7f5ed;border-color:#b7dec5;color:#17683e}.tag.bad{background:#fff0ed;border-color:#f3d4cf;color:#973b2d}
+button{background:#153a57;color:#fff;border:none;border-radius:10px;padding:13px 15px;font:600 15px system-ui;min-height:47px;cursor:pointer}
+button.alt{background:#ebf1f5;color:#17364e}button:disabled{opacity:.45;cursor:not-allowed}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{font-size:13px;font-weight:650;color:#50677a}
+input{display:block;margin-top:6px;border:1px solid #beccd7;border-radius:9px;width:100%;padding:11px;font:16px system-ui;color:#173043}
+h2{font-size:17px;margin:0 0 13px}.hint{font-size:13px;color:#667c8d}
+pre{border-radius:9px;background:#f0f5f8;padding:12px;font-size:12px;overflow:auto;white-space:pre-wrap;word-break:break-word;max-height:230px;min-height:78px}
+@media(max-width:480px){.fields{grid-template-columns:1fr}h1{font-size:24px}.card{padding:16px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header><span>JTK / Printer Test</span><span class="tag">RP425 · 4 × 6 · 203 dpi</span></header>
+<h1>Direct Bluetooth printing</h1>
+<p>Try sending a label straight from Chrome to your Rongta RP425. No paid printing service, PDF, or RT eLabel. This is a <strong>hardware test only</strong>; it does not save orders.</p>
+<section class="card">
+ <div class="row between"><h2>1. Connect</h2><span id="status" class="tag">Checking…</span></div>
+ <div class="row"><button id="connect">Connect Bluetooth printer</button><button id="disconnect" class="alt" disabled>Disconnect</button></div>
+ <p class="hint">Pair the RP425 in Android Bluetooth settings first. Open this page in recent Chrome on your Android tablet, not an in-app browser.</p>
+</section>
+<section class="card">
+ <h2>2. Test the printer</h2>
+ <div class="row"><button id="simple" disabled>Print small ZPL test</button><button id="full" class="alt" disabled>Print full 4 × 6 label</button></div>
+ <p class="hint">Start with the small test. It will still use one 4 × 6 label. If no label prints, check Diagnostics below. A successful data write does <em>not</em> confirm the printer actually printed.</p>
+</section>
+<section class="card">
+ <h2>Sample label fields</h2>
+ <div class="fields">
+  <label>Customer<input id="customer" maxlength="32" value="Jane Smith"></label>
+  <label>Invoice<input id="invoice" maxlength="25" value="10542"></label>
+  <label>Auction<input id="auction" maxlength="28" value="Auction E"></label>
+  <label>Auction date<input id="auctionDate" maxlength="16" value="10/18/2026"></label>
+  <label>Box dimensions<input id="dimensions" maxlength="24" value="12 x 12 x 8 in"></label>
+  <label>Package weight<input id="weight" maxlength="24" value="6 lb 7.2 oz"></label>
+  <label>Small count<input id="small" type="number" min="0" max="999" value="2"></label>
+  <label>Medium count<input id="medium" type="number" min="0" max="999" value="1"></label>
+  <label>Large count<input id="large" type="number" min="0" max="999" value="0"></label>
+ </div>
+ <p class="hint">Fictional sample customer information. Each full test label contains a new random package ID and QR code.</p>
+</section>
+<section class="card">
+ <h2>Diagnostics</h2>
+ <pre id="log" aria-live="polite"></pre>
+ <p class="hint">If no printer appears in the port picker, the RP425 may not expose Bluetooth RFCOMM/Serial Port Profile to Chrome. If data sends successfully but nothing prints, the firmware may require different printer commands.</p>
+</section>
+</main>
+<script>
+'use strict';
+var port = null, busy = false;
+function el(id){return document.getElementById(id)}
+function log(message){el('log').textContent += '['+new Date().toLocaleTimeString()+'] '+message+'\n';el('log').scrollTop = el('log').scrollHeight}
+function setStatus(message, cls){el('status').textContent=message;el('status').className='tag '+(cls||'')}
+function updateButtons(){var ready=!!port&&!busy;el('connect').disabled=busy||!!port||!('serial' in navigator);el('disconnect').disabled=!ready;el('simple').disabled=!ready;el('full').disabled=!ready}
+function field(id){return el(id).value}
+function clean(str,n){return String(str).replace(/[\\^~\r\n]/g,' ').replace(/[^\x20-\x7e]/g,'').slice(0,n)}
+function count(id){return Math.max(0,Math.min(999,parseInt(field(id),10)||0))}
+function line(x,y,label,value,size){return '^FO'+x+','+y+'^A0N,23,23^FD'+clean(label,32)+'^FS\n^FO'+x+','+(y+31)+'^A0N,'+size+','+size+'^FD'+clean(value,35)+'^FS\n'}
+function makeSimple(){
+ return '^XA\n^CI28\n^PW812\n^LL1218\n^FO35,60^A0N,57,57^FDJTK RP425 TEST^FS\n^FO35,150^A0N,32,32^FDIf you see this, ZPL printing works.^FS\n^FO35,210^GB730,3,3^FS\n^XZ\n'
+}
+function makeFull(){
+ var id='JTK-'+crypto.randomUUID().toUpperCase();
+ var p=['^XA','^CI28','^PW812','^LL1218','^LH0,0',
+ '^FO40,35^A0N,54,54^FDJTK PACKING LABEL^FS',
+ '^FO40,110^A0N,24,24^FDINTERNAL PACKAGE IDENTIFICATION^FS',
+ '^FO40,155^GB730,3,3^FS',
+ line(40,184,'CUSTOMER',field('customer'),43),
+ line(40,275,'INVOICE',field('invoice'),41),
+ line(40,366,'AUCTION',field('auction'),40),
+ '^FO520,185^BQN,2,5^FDLA,'+id+'^FS',
+ '^FO515,425^A0N,21,21^FDSCAN PACKAGE ID^FS',
+ line(40,468,'AUCTION DATE',field('auctionDate'),40),
+ '^FO40,573^GB730,3,3^FS',
+ '^FO40,594^A0N,30,30^FDITEM QUANTITIES^FS',
+ '^FO40,653^A0N,26,26^FDSMALL^FS','^FO291,653^A0N,26,26^FDMEDIUM^FS','^FO547,653^A0N,26,26^FDLARGE^FS',
+ '^FO40,693^A0N,65,65^FD'+count('small')+'^FS',
+ '^FO291,693^A0N,65,65^FD'+count('medium')+'^FS',
+ '^FO547,693^A0N,65,65^FD'+count('large')+'^FS',
+ '^FO40,789^GB730,3,3^FS',
+ line(40,810,'GROSS SHIPPING WEIGHT',field('weight'),54),
+ '^FO40,945^GB730,3,3^FS',
+ line(40,964,'BOX DIMENSIONS',field('dimensions'),47),
+ '^FO40,1090^GB730,3,3^FS',
+ '^FO40,1111^A0N,21,21^FDUNIQUE PACKAGE ID^FS',
+ '^FO40,1147^A0N,25,25^FD'+id+'^FS','^XZ'];
+ return {data:p.join('\n')+'\n',id:id}
+}
+async function send(data){
+ if(!port || busy)return;
+ busy=true;updateButtons();var writer;
+ try{writer=port.writable.getWriter();await writer.write(new TextEncoder().encode(data));log('Sent '+new TextEncoder().encode(data).length+' bytes. Check printer for physical output.')}
+ catch(e){log('Write error: '+e.name+' — '+e.message);setStatus('Write failed','bad')}
+ finally{if(writer)writer.releaseLock();busy=false;updateButtons()}
+}
+el('connect').onclick=async function(){
+ if(!('serial' in navigator)){log('Web Serial unavailable in this browser.');return}
+ try{
+  log('Opening Bluetooth serial port chooser…');
+  var selected=await navigator.serial.requestPort();
+  await selected.open({baudRate:9600});
+  port=selected;setStatus('Connected','ok');log('Port opened. Try small ZPL test first.')
+ }catch(e){log('Connect error: '+e.name+' — '+e.message);setStatus('Not connected','bad')}
+ updateButtons()
+};
+el('disconnect').onclick=async function(){try{await port.close()}catch(e){log('Disconnect error: '+e.message)}port=null;setStatus('Disconnected');updateButtons()};
+el('simple').onclick=function(){send(makeSimple())};
+el('full').onclick=function(){var job=makeFull();log('Test ID: '+job.id);send(job.data)};
+if(!window.isSecureContext){setStatus('HTTPS required','bad');log('Open the hosted HTTPS link, not a local file.')}
+else if(!('serial' in navigator)){setStatus('Web Serial unavailable','bad');log('Use current Chrome for Android; some devices/browsers lack Web Serial.')}
+else{setStatus('Ready to connect');log('Chrome Web Serial is available. Pair RP425 in Android Bluetooth settings before connecting.')}
+updateButtons();
+</script>
+</body>
+</html>
