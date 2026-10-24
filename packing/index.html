@@ -77,7 +77,7 @@ a{color:#175e87;font-weight:700}
 <div><label for="medium">Medium items</label><input id="medium" type="number" min="0" max="999" step="1" inputmode="numeric" value="0"></div>
 <div><label for="large">Large items</label><input id="large" type="number" min="0" max="999" step="1" inputmode="numeric" value="0"></div>
 </div>
-<div class="row spaced"><button id="savePrint">Save to Google Sheet &amp; Print</button><button class="alt" id="saveOnly">Save without printing</button></div>
+<div class="row spaced"><button type="button" id="savePrint">Save to Google Sheet &amp; Print</button><button type="button" class="alt" id="saveOnly">Save without printing</button></div>
 <p class="muted">The Google Sheet is updated <strong>before</strong> the printer receives data. Multiple boxes per customer are allowed. Reprints keep the original ID.</p>
 </div>
 </section>
@@ -187,15 +187,34 @@ async function savePackage(print){
  let payload;
  try{payload=pendingSave||packageInput();pendingSave=payload}catch(e){toast(e.message);return}
  setBusy(true);
+ let idToPrint=null;
  try{
   const result=await call('savePackage',{method:'POST',data:payload});
   const p=result.package;
   if(!packages.some(x=>x.id===p.id))packages.push(p);
   pendingSave=null;
-  renderPackages();toast(result.warning||'Saved '+p.id+' to Google Sheet');
+  renderPackages();
   resetPacking();
-  if(print)printExisting(p,false);
- }catch(e){toast('Not saved: '+e.message)}finally{setBusy(false)}
+  if(print){
+   idToPrint=p.id;
+   toast('Package saved to Google Sheet. Starting label print…');
+  }else{
+   toast(result.warning||'Saved '+p.id+' to Google Sheet');
+  }
+ }catch(e){
+  toast('Save was not confirmed: '+e.message+' — check the Packages list before trying again');
+ }finally{
+  setBusy(false);
+ }
+ // Separate the native Bluetooth call from the awaited network save.
+ // Reprint uses this same printExisting function and must retain the original ID.
+ if(idToPrint){
+  setTimeout(()=>{
+   const saved=packages.find(x=>x.id===idToPrint);
+   if(saved)printExisting(saved,false);
+   else toast('Package saved, but print could not start. Use Reprint for '+idToPrint);
+  },400);
+ }
 }
 function printExisting(p,reprint){
  if(!window.AndroidBridge||typeof window.AndroidBridge.printPackage!=='function'){
