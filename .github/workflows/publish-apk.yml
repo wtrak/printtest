@@ -1,0 +1,33 @@
+name: Publish RP425 test APK
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download successful test build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 40047326533 --repo "$GITHUB_REPOSITORY" \
+            --name jtk-rp425-test-apk --dir /tmp/apk
+          ls -lh /tmp/apk/app-debug.apk
+      - name: Publish APK as direct download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp /tmp/apk/app-debug.apk /tmp/JTK-RP425-Test.apk
+          gh release create rp425-test-v1 /tmp/JTK-RP425-Test.apk \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "JTK RP425 Test v1" \
+            --notes "Native Android Bluetooth/ZPL printer test. Download the APK directly on your Android tablet. Test only; no customer information." \
+            --latest
