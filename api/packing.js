@@ -166,12 +166,39 @@ module.exports=async function handler(req,res){
   if(action==='packages'&&req.method==='GET'){
    const id=new URL(req.url,'https://example.local').searchParams.get('auctionId');
    if(!id)throw err(400,'Auction required');
-   const rows=(await readRows('Packages','R',10000)).slice(1);
+   const rows=(await readRows('Packages','R',3000)).slice(1);
    return reply(res,200,{packages:rows.map((r,i)=>asPackage(r,i+1)).filter(x=>x.id&&x.auctionId===id).map(({row,...p})=>p)});
+  }
+  if(action==='exportCsv'&&req.method==='GET'){
+   const auctionId=new URL(req.url,'https://example.local').searchParams.get('auctionId');
+   if(!auctionId)throw err(400,'Select an auction before export');
+   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','R',3000)]);
+   const byKey=new Map(customerRows.slice(1).map(r=>[item(r,1),r]));
+   const safeCsv=(v)=>{
+    let s=String(v==null?'':v);
+    // Protect spreadsheet opening from CSV formula injection.
+    if(/^\s*[=+@]/.test(s))s="'"+s;
+    if(/[",\r\n]/.test(s))s='"'+s.replace(/"/g,'""')+'"';
+    return s;
+   };
+   const data=packageRows.slice(1).filter(r=>item(r,0)&&item(r,1)===auctionId).map(r=>{
+    const c=byKey.get(item(r,2))||[];
+    return [
+     item(r,3),item(r,4),item(r,5),item(c,5),item(c,6),item(c,7),item(c,8),
+     item(r,6),item(r,7),item(r,8),item(r,9),item(r,10),item(r,11),
+     item(r,12),item(r,13),item(r,14),item(c,18),item(c,19),item(c,20)
+    ];
+   });
+   const csv=[headers.join(','),...data.map(r=>r.map(safeCsv).join(','))].join('\r\n')+'\r\n';
+   res.statusCode=200;
+   res.setHeader('Content-Type','text/csv; charset=utf-8');
+   res.setHeader('Content-Disposition','attachment; filename="jtk-packing-ready-'+auctionId.replace(/[^A-Za-z0-9_-]/g,'')+'.csv"');
+   res.setHeader('Cache-Control','no-store');
+   return res.end(csv);
   }
   if(action==='savePackage'&&req.method==='POST'){
    const p=validatePackage(await body(req));
-   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','R',10000)]);
+   const [customerRows,packageRows]=await Promise.all([readRows('Customers'),readRows('Packages','R',3000)]);
    const ci=customerRows.findIndex((r,i)=>i>0&&item(r,1)===p.customerKey);
    if(ci<1)throw err(404,'Customer not found in Google Sheet');
    const cr=customerRows[ci];
@@ -191,7 +218,7 @@ module.exports=async function handler(req,res){
    const d=await body(req),id=checkedText(d.id,80,'package ID',true);
    const status=checkedText(d.printStatus,120,'print status',true);
    if(!['Data sent — verify label','Print failed','Reprint sent — verify label'].includes(status))throw err(400,'Invalid print status');
-   const rows=await readRows('Packages','R',10000);
+   const rows=await readRows('Packages','R',3000);
    const i=rows.findIndex((r,j)=>j>0&&item(r,0)===id);
    if(i<1)throw err(404,'Package not found');
    await setRange('Packages!Q'+(i+1),[[status]]);
@@ -202,7 +229,7 @@ module.exports=async function handler(req,res){
    const letter=checkedText(d.letter,1,'auction letter',true).toUpperCase();
    if(!/^[A-F]$/.test(letter))throw err(400,'Auction must be A, B, C, D, E or F');
    const date=checkedText(d.date,10,'auction date',true);
-   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date).toISOString().slice(0,10)!==date)throw err(400,'Invalid auction date');
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw err(400,'Invalid auction date');
    const auctionId='Auction-'+letter+'_'+date;
    if(!Array.isArray(d.rows)||d.rows.length===0||d.rows.length>500)throw err(400,'Upload 1–500 customer rows');
    const auctionRows=await readRows('Auctions','F',1000);
