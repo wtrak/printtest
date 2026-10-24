@@ -203,10 +203,13 @@ function printExisting(p,reprint){
   return;
  }
  // Only the Android native bridge ever receives the print payload.
- lastPrintID=p.id;
  const a=auctions.find(x=>x.id===p.auctionId)||{};
- window.AndroidBridge.printPackage(JSON.stringify({...p,auctionName:a.name||p.auctionId,auctionDate:a.date||''}));
- toast((reprint?'Reprinting ':'Printing ')+p.id+' to RP425…');
+ try {
+  window.AndroidBridge.printPackage(JSON.stringify({...p,auctionName:a.name||p.auctionId,auctionDate:a.date||''}));
+  toast((reprint?'Reprinting ':'Printing ')+p.id+' to RP425…');
+ } catch(e) {
+  toast('Could not start printer: '+(e&&e.message?e.message:String(e)));
+ }
 }
 window.jtkNativePrintResult=async function(raw){
  let data;try{data=typeof raw==='string'?JSON.parse(raw):raw}catch{return toast('Unrecognized printer result')}
