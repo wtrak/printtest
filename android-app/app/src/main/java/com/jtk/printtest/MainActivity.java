@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
 
         findButton = button(main, "1. Find paired RP425", () -> findPrinter());
         smallButton = button(main, "2. Print small ZPL test (4×6 label)", () -> print(false));
-        fullButton = button(main, "3. Print full 4×6 sample label", () -> print(true));
+        fullButton = button(main, "3. Print full 4×6 label + QR code", () -> print(true));
         smallButton.setEnabled(false);
         fullButton.setEnabled(false);
 
@@ -223,6 +223,8 @@ public class MainActivity extends Activity {
                "^FO40,236^A0N,44,44^FDJane Smith^FS\n" +
                "^FO40,307^A0N,25,25^FDINVOICE^FS\n" +
                "^FO40,343^A0N,42,42^FD10542^FS\n" +
+               "^FO520,190^BQN,2,5^FDLA," + packageId + "^FS\n" +
+               "^FO527,378^A0N,22,22^FDSCAN PACKAGE ID^FS\n" +
                "^FO40,415^A0N,25,25^FDAUCTION^FS\n" +
                "^FO40,452^A0N,40,40^FDAuction E - 10/18/2026^FS\n" +
                "^FO40,522^GB730,3,3^FS\n" +
