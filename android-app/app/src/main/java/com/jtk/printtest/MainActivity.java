@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
         status.setText("Status: Ready");
         main.addView(status);
 
+        button(main, "OPEN PACKING STATION (IMPORT CSV)", () -> startActivity(new android.content.Intent(MainActivity.this, PackingActivity.class)));
         findButton = button(main, "1. Find paired RP425", () -> findPrinter());
         smallButton = button(main, "2. Print small ZPL test (4×6 label)", () -> print(false));
         fullButton = button(main, "3. Print full 4×6 label + QR code", () -> print(true));
